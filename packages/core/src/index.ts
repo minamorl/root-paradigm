@@ -1,7 +1,5 @@
-export type Create = { type: "Create"; id: string; value: unknown };
-export type Update = { type: "Update"; id: string; value: unknown };
-export type Delete = { type: "Delete"; id: string };
-export type Event = Create | Update | Delete;
+export type { Id, Create, Update, Delete, Event } from './types';
+import type { Event } from './types';
 
 export type Subscriber = (ev: Event) => void;
 
@@ -28,15 +26,19 @@ export class Root {
     const s: Record<string, unknown> = {};
     for (const ev of this.log) {
       switch (ev.type) {
-        case "Create":
+        case 'Create':
           s[ev.id] = ev.value;
           break;
-        case "Update":
+        case 'Update':
           if (ev.id in s) s[ev.id] = ev.value;
           break;
-        case "Delete":
+        case 'Delete':
           delete s[ev.id];
           break;
+        default: {
+          const _exhaustive: never = ev;
+          void _exhaustive;
+        }
       }
     }
     return s;
@@ -45,7 +47,9 @@ export class Root {
   // 部分一致マッチ（最初は素朴実装）
   match(pattern: Partial<Event>): Event[] {
     return this.log.filter((ev) =>
-      Object.entries(pattern).every(([k, v]) => (ev as any)[k] === v)
+      Object.entries(pattern).every(
+        ([k, v]) => (ev as Record<string, unknown>)[k] === v,
+      ),
     );
   }
 
@@ -54,7 +58,7 @@ export class Root {
     const snapshot = this.state();
     const newLog: Event[] = [];
     for (const [id, value] of Object.entries(snapshot)) {
-      newLog.push({ type: "Create", id, value });
+      newLog.push({ type: 'Create', id, value });
     }
     (this.log as Event[]).length = 0;
     (this.log as Event[]).push(...newLog);
