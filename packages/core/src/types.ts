@@ -1,17 +1,6 @@
-/**
- * Primitive events that describe state changes.
- */
-export type Create = { type: 'Create'; id: string; value: unknown };
-export type Update = { type: 'Update'; id: string; value: unknown };
-export type Delete = { type: 'Delete'; id: string };
+export type Id = string;
 
-/**
- * Union of all event variants.
- */
+export type Create = { type: 'Create'; id: Id; value: unknown };
+export type Update = { type: 'Update'; id: Id; value: unknown };
+export type Delete = { type: 'Delete'; id: Id };
 export type Event = Create | Update | Delete;
-
-/**
- * Subscriber callback for push-style notifications per event.
- */
-export type Subscriber = (ev: Event) => void;
-

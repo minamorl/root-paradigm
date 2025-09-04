@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { invert, Root, Patch } from './index';
+import { invert, Root, Patch, rewrite } from './index';
 import type { Event } from './types';
 
+const law = { enforce: (p: Patch) => p };
+
 function apply(base: Record<string, unknown>, h: Event[]): Record<string, unknown> {
-  const r = new Root();
+  const r = new Root(rewrite, law);
   for (const [id, value] of Object.entries(base)) {
     r.commit({ type: 'Create', id, value });
   }
-  r.commit(new Patch(h));
+  r.commit(Patch.from(h, rewrite));
   const inv = invert(h, base);
-  r.commit(new Patch(inv));
+  r.commit(Patch.from(inv, rewrite));
   return r.state();
 }
 
@@ -38,4 +40,3 @@ describe('invert(events, base)', () => {
     expect(state).toEqual(base);
   });
 });
-
