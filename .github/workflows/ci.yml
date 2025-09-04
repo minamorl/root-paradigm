@@ -16,6 +16,6 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: pnpm install
+      - run: pnpm -C packages/core install
       - run: pnpm -C packages/core lint
       - run: pnpm -C packages/core test
