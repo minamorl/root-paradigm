@@ -16,6 +16,7 @@ const patchBases = new WeakMap<Patch, Record<string, unknown>>();
  */
 export class Root {
   private nf: Event[] = [];
+  private readonly subs = new Set<(ev: Event | { type: 'Snapshot' }) => void>();
   constructor(
     private readonly rewrite: (es: readonly Event[]) => Event[],
     private readonly law: { enforce(p: Patch): Patch },
@@ -35,6 +36,13 @@ export class Root {
     const enforced = this.law.enforce(p);
     // Merge raw events first, then normalize entire history.
     this.nf = this.rewrite([...this.nf, ...enforced.toEvents()]);
+    // push notify committed events (post-law enforcement)
+    const events = enforced.toEvents();
+    if (this.subs.size && events.length) {
+      for (const fn of this.subs) {
+        for (const ev of events) fn(ev);
+      }
+    }
   }
 
   /** Current replayed state of the normalized history. */
@@ -57,5 +65,27 @@ export class Root {
   /** Redo a previously undone patch by committing it again. */
   redo(p: Patch): void {
     this.commit(p);
+  }
+
+  /** Subscribe to push notifications. Returns an unsubscribe; emits initial Snapshot. */
+  subscribe(fn: (ev: Event | { type: 'Snapshot' }) => void): () => void {
+    this.subs.add(fn);
+    fn({ type: 'Snapshot' });
+    return () => {
+      this.subs.delete(fn);
+    };
+  }
+
+  /** Compact history to a snapshot of Creates; then emit Snapshot. */
+  compact(): void {
+    const snap = this.state();
+    const newLog: Event[] = [];
+    for (const [id, value] of Object.entries(snap)) {
+      newLog.push({ type: 'Create', id, value } as Event);
+    }
+    this.nf = newLog;
+    if (this.subs.size) {
+      for (const fn of this.subs) fn({ type: 'Snapshot' });
+    }
   }
 }
