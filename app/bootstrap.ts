@@ -13,6 +13,7 @@ export type BootstrapOptions = {
   sse?: SseAdapter;
   blob?: BlobAdapter;
   binary?: { inlineMaxBytes?: number; sseBase64MaxBytes?: number };
+  metaDir?: string;
 };
 
 export function bootstrap(opts: BootstrapOptions = {}) {
@@ -24,6 +25,15 @@ export function bootstrap(opts: BootstrapOptions = {}) {
   adapters.push(wal);
   if (opts.sqlite) adapters.push(new SqliteAdapter(opts.sqlite, { inlineMaxBytes: opts.binary?.inlineMaxBytes }));
   const blob = opts.blob ?? new BlobFsAdapter("blobs");
-  const host = new RootHost(root, adapters, opts.blob || opts.binary ? { binary: { adapter: blob, inlineMaxBytes: opts.binary?.inlineMaxBytes, sseBase64MaxBytes: opts.binary?.sseBase64MaxBytes } } : undefined);
+  const hostOpts: Parameters<typeof RootHost>[2] = {} as any;
+  if (opts.metaDir) (hostOpts as any).metaDir = opts.metaDir;
+  if (opts.blob || opts.binary) {
+    (hostOpts as any).binary = {
+      adapter: blob,
+      inlineMaxBytes: opts.binary?.inlineMaxBytes,
+      sseBase64MaxBytes: opts.binary?.sseBase64MaxBytes,
+    };
+  }
+  const host = new RootHost(root, adapters, Object.keys(hostOpts).length ? hostOpts : undefined);
   return { root, host, sse, wal };
 }
