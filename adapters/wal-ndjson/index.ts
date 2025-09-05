@@ -19,6 +19,8 @@ export class WalNdjsonAdapter implements Adapter {
   }
 
   async onNotifyBatch(ns: Notify[]): Promise<void> {
+    // Guard: NDJSON must be text-only; require BinaryRef instead of raw binary.
+    for (const n of ns) assertNoBinary(n);
     const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     await this.rotateIfNeeded(day);
     if (!this.handle) return;
@@ -54,4 +56,20 @@ export class WalNdjsonAdapter implements Adapter {
     if (this.handle) await this.handle.close();
     this.handle = await fsp.open(file, "a");
   }
+}
+
+function assertNoBinary(x: unknown): void {
+  const visit = (v: unknown) => {
+    if (v == null) return;
+    if (isBinary(v)) throw new Error("wal-ndjson cannot serialize binary; expected BinaryRef");
+    if (Array.isArray(v)) { for (const it of v) visit(it); return; }
+    if (typeof v === 'object') { for (const it of Object.values(v as any)) visit(it); }
+  };
+  visit(x);
+}
+function isBinary(x: unknown): x is Uint8Array {
+  return (
+    !!x &&
+    (x instanceof Uint8Array || (typeof (globalThis as any).Buffer !== "undefined" && (globalThis as any).Buffer?.isBuffer?.(x)))
+  );
 }

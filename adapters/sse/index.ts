@@ -51,10 +51,28 @@ export class SseAdapter implements Adapter {
   }
 
   async onNotify(n: Notify): Promise<void> {
+    // Guard: SSE stream is text-only; require BinaryRef instead of raw binary.
+    assertNoBinary(n);
     this.hub.broadcast(n);
   }
 
   async health(): Promise<{ ok: boolean }> {
     return { ok: true };
   }
+}
+
+function assertNoBinary(x: unknown): void {
+  const visit = (v: unknown) => {
+    if (v == null) return;
+    if (isBinary(v)) throw new Error("sse cannot stream binary; expected BinaryRef");
+    if (Array.isArray(v)) { for (const it of v) visit(it); return; }
+    if (typeof v === 'object') { for (const it of Object.values(v as any)) visit(it); }
+  };
+  visit(x);
+}
+function isBinary(x: unknown): x is Uint8Array {
+  return (
+    !!x &&
+    (x instanceof Uint8Array || (typeof (globalThis as any).Buffer !== "undefined" && (globalThis as any).Buffer?.isBuffer?.(x)))
+  );
 }
