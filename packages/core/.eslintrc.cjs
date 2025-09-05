@@ -1,13 +1,13 @@
 module.exports = {
-  root: true,
+  root: false,
+  extends: ['../../.eslintrc.cjs'],
   parser: '@typescript-eslint/parser',
-  plugins: ['@typescript-eslint'],
-  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
-  env: { es2022: true, node: true },
-  overrides: [
-    {
-      files: ['*.test.ts', '*.property.test.ts'],
-      globals: { describe: 'readonly', it: 'readonly', expect: 'readonly' },
-    },
-  ],
+  plugins: ['import', '@typescript-eslint'],
+  rules: {
+    // Forbid deep imports into core src; enforce barrel usage
+    'import/no-restricted-paths': [
+      'error',
+      { zones: [{ target: './', from: './packages/core/src' }] },
+    ],
+  },
 };

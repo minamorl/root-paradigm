@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { describe, it, expect } from 'vitest';
 import type { Notify, EventN, BinaryRef } from '../../../adapters/types.ts';
 
@@ -30,6 +31,7 @@ function ev(value: unknown): EventN {
 describe('SqliteAdapter binary handling', () => {
   it('stores BinaryRef as JSON', async () => {
     const { db, calls } = makeMockDb();
+    // eslint-disable-next-line import/no-restricted-paths
     const { SqliteAdapter } = await import(new URL('../../../../adapters/sqlite/index.ts', import.meta.url).pathname);
     const sqlite = new SqliteAdapter(db);
     const ref: BinaryRef = { kind: 'blob', uri: 'blob:sha256-' + '0'.repeat(64), bytes: 10 };
@@ -44,6 +46,7 @@ describe('SqliteAdapter binary handling', () => {
 
   it('stores small Uint8Array inline as BLOB', async () => {
     const { db, calls } = makeMockDb();
+    // eslint-disable-next-line import/no-restricted-paths
     const { SqliteAdapter } = await import(new URL('../../../../adapters/sqlite/index.ts', import.meta.url).pathname);
     const sqlite = new SqliteAdapter(db, { inlineMaxBytes: 1024 });
     const bin = new Uint8Array([1,2,3]);

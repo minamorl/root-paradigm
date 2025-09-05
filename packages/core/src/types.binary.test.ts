@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest';
+// eslint-disable-next-line import/no-restricted-paths
 import type { BinaryRef } from '../../../adapters/types.ts';
 import type { Create, Update } from './types';
 
@@ -12,4 +13,3 @@ describe('BinaryRef type compatibility', () => {
     void c; void u;
   });
 });
-

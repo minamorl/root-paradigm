@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { promises as fsp } from "fs";
 import { mkdirSync } from "fs";
 import { dirname, join } from "path";
+// eslint-disable-next-line import/no-restricted-paths
 import type { BlobAdapter } from '../../../../adapters/types.ts';
 
 /** File-system based content-addressed blob store. */
@@ -28,7 +29,7 @@ export class BlobFsAdapter implements BlobAdapter {
     let contentType: string | undefined;
     try {
       contentType = JSON.parse(await fsp.readFile(`${p}.ctx`, "utf8"))?.contentType;
-    } catch {}
+    } catch { /* ignore missing ctx */ void 0; }
     return { content, contentType };
   }
 
@@ -50,4 +51,3 @@ export class BlobFsAdapter implements BlobAdapter {
     return m[1];
   }
 }
-

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Root } from '../root';
 import { rewrite } from '../rewrite';
+// eslint-disable-next-line import/no-restricted-paths
 import type { Adapter, Notify } from '../../../adapters/types.ts';
 import { BlobFsAdapter } from '../adapters/blob-fs/index.ts';
 import { join } from 'path';
@@ -13,6 +14,7 @@ class CaptureAdapter implements Adapter {
 
 describe('RootHost binary preprocessing', () => {
   it('emits BinaryRef for large Uint8Array', async () => {
+    // eslint-disable-next-line import/no-restricted-paths
     const { RootHost } = await import(new URL('../../../../host/root-host.ts', import.meta.url).pathname);
     const r = new Root(rewrite, { enforce: p => p });
     const cap = new CaptureAdapter();
@@ -34,6 +36,7 @@ describe('RootHost binary preprocessing', () => {
   });
 
   it('passes small Uint8Array unchanged when no SSE', async () => {
+    // eslint-disable-next-line import/no-restricted-paths
     const { RootHost } = await import(new URL('../../../../host/root-host.ts', import.meta.url).pathname);
     const r = new Root(rewrite, { enforce: p => p });
     const cap = new CaptureAdapter();

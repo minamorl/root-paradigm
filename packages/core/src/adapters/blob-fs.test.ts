@@ -15,7 +15,7 @@ async function rimraf(p: string): Promise<void> {
     } else {
       await fsp.unlink(p);
     }
-  } catch {}
+  } catch { /* ignore */ void 0; }
 }
 
 describe('BlobFsAdapter', () => {
@@ -42,4 +42,3 @@ describe('BlobFsAdapter', () => {
     expect(a.uri).not.toBe(b.uri);
   });
 });
-
