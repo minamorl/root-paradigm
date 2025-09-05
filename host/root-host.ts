@@ -1,5 +1,5 @@
 import type { Root, Event as CoreEvent } from "@minamorl/root-core";
-import type { Adapter, Notify, EventN, Snapshot } from "../adapters/types";
+import type { Adapter, Notify, EventN, Snapshot, BlobAdapter, BinaryRef } from "../adapters/types";
 import { metrics } from "./metrics";
 import { promises as fsp } from "fs";
 import { dirname, join } from "path";
@@ -26,6 +26,11 @@ export class RootHost {
   private readonly queueCapacity: number;
   private readonly strategy: "block" | "drop-new" | "drop-old";
   private readonly metaDir: string;
+  private readonly binary?: {
+    adapter: BlobAdapter;
+    inlineMaxBytes: number;
+    sseBase64MaxBytes: number;
+  };
 
   constructor(
     private readonly root: Root,
@@ -37,6 +42,11 @@ export class RootHost {
       queueCapacity?: number;
       strategy?: "block" | "drop-new" | "drop-old";
       metaDir?: string;
+      binary?: {
+        adapter: BlobAdapter;
+        inlineMaxBytes?: number;
+        sseBase64MaxBytes?: number;
+      };
     },
   ) {
     this.seq = 0n; // will be loaded
@@ -47,6 +57,13 @@ export class RootHost {
     this.strategy = opts?.strategy ?? "drop-new";
     this.metaDir = opts?.metaDir ?? join("host", "meta");
     this.workers = adapters.map(a => ({ adapter: a, queue: [], flushing: false, timer: null }));
+    if (opts?.binary) {
+      this.binary = {
+        adapter: opts.binary.adapter,
+        inlineMaxBytes: opts.binary.inlineMaxBytes ?? 32 * 1024,
+        sseBase64MaxBytes: opts.binary.sseBase64MaxBytes ?? 8 * 1024,
+      };
+    }
 
     // Initialize sequence from adapters or meta file
     void this.initSeqFrom(adapters)
@@ -201,6 +218,10 @@ export class RootHost {
   }
 
   private async sendWithRetry(adapter: Adapter, batch: Notify[]): Promise<void> {
+    // Normalize binary payloads per-adapter before send.
+    if (this.binary) {
+      batch = await this.normalizeBatchForAdapter(adapter, batch);
+    }
     const max = 5;
     let attempt = 0;
     while (attempt < max) {
@@ -258,4 +279,66 @@ export class RootHost {
     mkdirSync(dirname(p), { recursive: true });
     await fsp.writeFile(p, String(seq), { encoding: "utf8" });
   }
+
+  // Binary normalization helpers
+  private async normalizeBatchForAdapter(adapter: Adapter, batch: Notify[]): Promise<Notify[]> {
+    const isSse = adapter.name === "sse";
+    const isWal = adapter.name === "wal-ndjson";
+    const forceRef = isSse || isWal;
+    const out: Notify[] = [];
+    for (const n of batch) {
+      if (n.type === "Snapshot") {
+        out.push(n);
+        continue;
+      }
+      const ev = n as EventN;
+      const value = await this.normalizeBinaryDeep(ev.value, { forceRef });
+      out.push({ ...ev, value });
+    }
+    return out;
+  }
+
+  private async normalizeBinaryDeep(input: unknown, opts: { forceRef: boolean }): Promise<unknown> {
+    if (!this.binary) return input;
+    const { adapter, inlineMaxBytes } = this.binary;
+    const seen = new WeakSet<object>();
+    const visit = async (v: unknown): Promise<unknown> => {
+      if (v == null) return v;
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return v;
+      if (isBinary(v)) {
+        const bytes = (v as Uint8Array).byteLength;
+        if (opts.forceRef || bytes > inlineMaxBytes) {
+          const b = v as Uint8Array;
+          const { uri, bytes: sz } = await adapter.put(b);
+          const ref: BinaryRef = { kind: "blob", uri, bytes: sz };
+          return ref;
+        }
+        return v;
+      }
+      if (Array.isArray(v)) {
+        const arr = new Array(v.length);
+        for (let i = 0; i < v.length; i++) arr[i] = await visit(v[i]);
+        return arr;
+      }
+      if (typeof v === "object") {
+        if (seen.has(v as object)) return v; // avoid cycles
+        seen.add(v as object);
+        const out: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+          out[k] = await visit(val);
+        }
+        return out;
+      }
+      return v;
+    };
+    return await visit(input);
+  }
+}
+
+function isBinary(x: unknown): x is Uint8Array {
+  // Buffer is a Uint8Array subclass; also catch plain Uint8Array
+  return (
+    !!x &&
+    (x instanceof Uint8Array || (typeof (globalThis as any).Buffer !== "undefined" && (globalThis as any).Buffer?.isBuffer?.(x)))
+  );
 }

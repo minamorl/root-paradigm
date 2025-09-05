@@ -24,5 +24,13 @@ export function openDb(dbOrPath: DB | string): DB {
 function applyMigrations(db: DB): void {
   const sql = readFileSync(join(__dirname, "migrations", "001_init.sql"), "utf8");
   db.exec(sql);
+  // Add new columns for binary/json split if they don't exist.
+  db.exec(
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_json TEXT;\n` +
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_blob BLOB;\n` +
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_ct TEXT;\n` +
+    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_json TEXT;\n` +
+    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_blob BLOB;\n` +
+    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_ct TEXT;`
+  );
 }
-

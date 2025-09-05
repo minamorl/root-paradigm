@@ -3,3 +3,6 @@ dist
 .vscode
 .DS_Store
 coverage
+.tmp/
+blobs/
+journal/
