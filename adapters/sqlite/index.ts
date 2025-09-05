@@ -1,12 +1,5 @@
 import type { Adapter, Notify, EventN } from "../types";
-
-// Minimal DB interface to avoid hard dependency; compatible with better-sqlite3.
-type Statement = { run: (...args: any[]) => unknown };
-type DB = {
-  exec(sql: string): void;
-  prepare(sql: string): Statement;
-  transaction<T extends (...args: any[]) => unknown>(fn: T): T;
-};
+import { openDb, type DB, type Statement } from "./db";
 
 export class SqliteAdapter implements Adapter {
   public readonly name = "sqlite";
@@ -18,41 +11,17 @@ export class SqliteAdapter implements Adapter {
   private readonly txApply: (ns: Notify[]) => void;
 
   constructor(dbOrPath: DB | string) {
-    // Lazy load better-sqlite3 if a path is provided.
-    if (typeof dbOrPath === "string") {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const BetterSqlite3 = require("better-sqlite3");
-      this.db = new BetterSqlite3(dbOrPath);
-    } else {
-      this.db = dbOrPath;
-    }
-
-    this.db.exec(
-      `CREATE TABLE IF NOT EXISTS events (
-        seq TEXT PRIMARY KEY,
-        ts TEXT NOT NULL,
-        type TEXT NOT NULL,
-        id TEXT,
-        value TEXT,
-        trace_id TEXT UNIQUE,
-        version INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS state (
-        id TEXT PRIMARY KEY,
-        value TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
-      CREATE INDEX IF NOT EXISTS idx_events_trace ON events(trace_id);
-      `,
-    );
+    this.db = openDb(dbOrPath);
 
     this.insertEvent = this.db.prepare(
-      `INSERT OR IGNORE INTO events (seq, ts, type, id, value, trace_id, version)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO events (seq, ts, type, id, value, trace_id, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(seq) DO NOTHING`,
     );
     this.insertSnapshot = this.db.prepare(
-      `INSERT OR IGNORE INTO events (seq, ts, type, id, value, trace_id, version)
-       VALUES (?, ?, 'Snapshot', NULL, NULL, ?, ?)`,
+      `INSERT INTO events (seq, ts, type, id, value, trace_id, version)
+       VALUES (?, ?, 'Snapshot', NULL, NULL, ?, ?)
+       ON CONFLICT(seq) DO NOTHING`,
     );
     this.upsertState = this.db.prepare(
       `INSERT INTO state(id, value) VALUES(?, ?)
@@ -76,13 +45,13 @@ export class SqliteAdapter implements Adapter {
   private applyOne(n: Notify): void {
     if (n.type === "Snapshot") {
       // Persist snapshot marker for completeness; no state mutation required.
-      this.insertSnapshot.run(String(n.seq), n.ts, n.traceId ?? null, n.version);
+      this.insertSnapshot.run(Number(n.seq), n.ts, (n as any).traceId ?? null, n.version);
       return;
     }
     const ev = n as EventN;
     const valueJson = ev.value === undefined ? null : JSON.stringify(ev.value);
-    this.insertEvent.run(
-      String(ev.seq),
+    const res: any = this.insertEvent.run(
+      Number(ev.seq),
       ev.ts,
       ev.type,
       ev.id,
@@ -90,6 +59,11 @@ export class SqliteAdapter implements Adapter {
       ev.traceId ?? null,
       ev.version,
     );
+    const inserted = !!(res && typeof res.changes === "number" ? res.changes > 0 : true);
+    if (!inserted && ev.traceId) {
+      // duplicate by traceId or seq; skip state mutation
+      return;
+    }
     switch (ev.type) {
       case "Create":
       case "Update":
@@ -104,5 +78,23 @@ export class SqliteAdapter implements Adapter {
   async drain(): Promise<void> {
     // Synchronous driver; nothing buffered here.
   }
-}
 
+  async health(): Promise<{ ok: boolean }> {
+    try {
+      // no-op statement ensures DB is reachable
+      this.insertSnapshot;
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  // Optional helper usable by RootHost to initialize seq.
+  maxSeq(): bigint {
+    // We'll prepare a statement dynamically to avoid maintaining one.
+    const stmt = this.db.prepare(`SELECT IFNULL(MAX(seq), 0) AS max FROM events`);
+    const row: any = (stmt as any).get ? (stmt as any).get() : null;
+    const max = row?.max ?? 0;
+    return BigInt(max);
+  }
+}

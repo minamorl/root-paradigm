@@ -1,15 +1,20 @@
 import type { Adapter, Notify } from "../types";
 import type { IncomingMessage, ServerResponse } from "http";
+import { SseHub } from "./hub";
 
 type ResLike = Pick<ServerResponse, "writeHead" | "write" | "end" | "setHeader"> & {
   flushHeaders?: () => void;
+  on?: (ev: string, cb: () => void) => void;
 };
 
 export class SseAdapter implements Adapter {
   public readonly name = "sse";
-  private readonly clients = new Set<ResLike>();
+  private readonly hub: SseHub;
+  private readonly heartbeats = new WeakMap<ResLike, NodeJS.Timeout>();
 
-  constructor() {}
+  constructor(hub = new SseHub()) {
+    this.hub = hub;
+  }
 
   // HTTP handler to register a client. Example usage with Node http:
   //   http.createServer((req, res) => sse.handler(req, res)).listen(8080)
@@ -19,30 +24,37 @@ export class SseAdapter implements Adapter {
     res.setHeader("Connection", "keep-alive");
     res.writeHead?.(200);
     res.flushHeaders?.();
+    res.write("retry: 2000\n\n");
+    // initial comment for intermediates
     res.write(": connected\n\n");
-    this.clients.add(res);
+    this.hub.add(res);
+    // heartbeat every 15s
+    const t = setInterval(() => {
+      try {
+        res.write(":\n\n");
+      } catch {
+        this.hub.remove(res);
+        clearInterval(t);
+      }
+    }, 15000);
+    this.heartbeats.set(res, t);
     const onClose = () => {
-      this.clients.delete(res);
+      this.hub.remove(res);
+      const hb = this.heartbeats.get(res);
+      if (hb) clearInterval(hb);
       try {
         res.end();
       } catch {}
     };
-    // Rely on runtime to call onClose when connection ends.
-    // @ts-expect-error Node-specific APIs may exist at runtime
     res.on?.("close", onClose);
-    // @ts-expect-error Node-specific APIs may exist at runtime
     res.on?.("finish", onClose);
   }
 
   async onNotify(n: Notify): Promise<void> {
-    const payload = `data: ${JSON.stringify(n)}\n\n`;
-    for (const res of Array.from(this.clients)) {
-      try {
-        res.write(payload);
-      } catch {
-        this.clients.delete(res);
-      }
-    }
+    this.hub.broadcast(n);
+  }
+
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
   }
 }
-

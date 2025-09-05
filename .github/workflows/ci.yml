@@ -19,3 +19,9 @@ jobs:
       - run: pnpm -C packages/core install
       - run: pnpm -C packages/core lint
       - run: pnpm -C packages/core test
+      - name: Guard against deep core imports
+        run: |
+          if rg -n "\.\./packages/core/src/" -S | grep -v "^packages/core/"; then
+            echo "Deep imports into core src are forbidden. Use @minamorl/root-core barrel." >&2
+            exit 1
+          fi

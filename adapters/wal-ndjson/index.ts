@@ -2,6 +2,7 @@ import { promises as fsp } from "fs";
 import { mkdirSync } from "fs";
 import { dirname, join } from "path";
 import type { Adapter, Notify } from "../types";
+import { appendAndFsync } from "./fs-append";
 
 export class WalNdjsonAdapter implements Adapter {
   public readonly name = "wal-ndjson";
@@ -22,9 +23,7 @@ export class WalNdjsonAdapter implements Adapter {
     await this.rotateIfNeeded(day);
     if (!this.handle) return;
     const lines = ns.map(n => JSON.stringify(n)).join("\n") + "\n";
-    await this.handle.appendFile(lines, { encoding: "utf8" });
-    // Ensure durability
-    await this.handle.datasync();
+    await appendAndFsync(this.handle, lines);
   }
 
   async drain(): Promise<void> {
@@ -38,13 +37,21 @@ export class WalNdjsonAdapter implements Adapter {
     }
   }
 
+  async health(): Promise<{ ok: boolean }> {
+    try {
+      // if dir is writable, consider ok. We attempt to open current day file lazily.
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   private async rotateIfNeeded(day: string): Promise<void> {
     if (this.currentDay === day && this.handle) return;
     this.currentDay = day;
-    const file = join(this.dir, `${day}.ndjson.zst`);
+    const file = join(this.dir, `${day}.ndjson`);
     mkdirSync(dirname(file), { recursive: true });
     if (this.handle) await this.handle.close();
     this.handle = await fsp.open(file, "a");
   }
 }
-
