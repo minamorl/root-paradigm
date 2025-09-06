@@ -250,7 +250,8 @@ export class RootHost {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const file = join("host", "dlq", `${day}.ndjson`);
     mkdirSync(dirname(file), { recursive: true });
-    const lines = batch.map(n => JSON.stringify(n)).join("\n") + "\n";
+    const bigintSafe = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);
+    const lines = batch.map(n => JSON.stringify(n, bigintSafe)).join("\n") + "\n";
     await fsp.appendFile(file, lines, { encoding: "utf8" });
   }
 

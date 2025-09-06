@@ -24,13 +24,21 @@ export function openDb(dbOrPath: DB | string): DB {
 function applyMigrations(db: DB): void {
   const sql = readFileSync(join(__dirname, "migrations", "001_init.sql"), "utf8");
   db.exec(sql);
-  // Add new columns for binary/json split if they don't exist.
-  db.exec(
-    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_json TEXT;\n` +
-    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_blob BLOB;\n` +
-    `ALTER TABLE events ADD COLUMN IF NOT EXISTS value_ct TEXT;\n` +
-    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_json TEXT;\n` +
-    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_blob BLOB;\n` +
-    `ALTER TABLE state ADD COLUMN IF NOT EXISTS value_ct TEXT;`
-  );
+  // Add new columns for binary/json split; tolerate duplicates on existing DBs.
+  const alters = [
+    `ALTER TABLE events ADD COLUMN value_json TEXT`,
+    `ALTER TABLE events ADD COLUMN value_blob BLOB`,
+    `ALTER TABLE events ADD COLUMN value_ct TEXT`,
+    `ALTER TABLE state  ADD COLUMN value_json TEXT`,
+    `ALTER TABLE state  ADD COLUMN value_blob BLOB`,
+    `ALTER TABLE state  ADD COLUMN value_ct TEXT`,
+  ];
+  for (const sql2 of alters) {
+    try {
+      db.exec(sql2);
+    } catch (e) {
+      const msg = String((e as any)?.message ?? e);
+      if (!/duplicate column name/i.test(msg)) throw e;
+    }
+  }
 }

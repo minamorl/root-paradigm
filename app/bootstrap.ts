@@ -23,7 +23,11 @@ export function bootstrap(opts: BootstrapOptions = {}) {
   adapters.push(sse);
   const wal = new WalNdjsonAdapter(opts.journalDir ?? "journal");
   adapters.push(wal);
-  if (opts.sqlite) adapters.push(new SqliteAdapter(opts.sqlite, { inlineMaxBytes: opts.binary?.inlineMaxBytes }));
+  let sqlite: SqliteAdapter | undefined;
+  if (opts.sqlite) {
+    sqlite = new SqliteAdapter(opts.sqlite, { inlineMaxBytes: opts.binary?.inlineMaxBytes });
+    adapters.push(sqlite);
+  }
   const blob = opts.blob ?? new BlobFsAdapter("blobs");
   const hostOpts: Parameters<typeof RootHost>[2] = {} as any;
   if (opts.metaDir) (hostOpts as any).metaDir = opts.metaDir;
@@ -35,5 +39,5 @@ export function bootstrap(opts: BootstrapOptions = {}) {
     };
   }
   const host = new RootHost(root, adapters, Object.keys(hostOpts).length ? hostOpts : undefined);
-  return { root, host, sse, wal };
+  return { root, host, sse, wal, sqlite };
 }

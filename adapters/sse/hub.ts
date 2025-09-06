@@ -18,7 +18,8 @@ export class SseHub {
   }
 
   broadcast(n: Notify): void {
-    const payload = `data: ${JSON.stringify(n)}\n\n`;
+    const bigintSafe = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);
+    const payload = `data: ${JSON.stringify(n, bigintSafe)}\n\n`;
     for (const res of Array.from(this.clients)) {
       try {
         res.write(payload);
@@ -28,4 +29,3 @@ export class SseHub {
     }
   }
 }
-

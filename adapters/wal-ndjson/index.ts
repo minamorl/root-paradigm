@@ -24,7 +24,8 @@ export class WalNdjsonAdapter implements Adapter {
     const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     await this.rotateIfNeeded(day);
     if (!this.handle) return;
-    const lines = ns.map(n => JSON.stringify(n)).join("\n") + "\n";
+    const bigintSafe = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);
+    const lines = ns.map(n => JSON.stringify(n, bigintSafe)).join("\n") + "\n";
     await appendAndFsync(this.handle, lines);
   }
 
