@@ -8,7 +8,8 @@
     "build": "pnpm -C packages/core build",
     "test": "pnpm -C packages/core test",
     "lint": "pnpm -C packages/core lint",
-    "dev": "pnpm -C packages/core dev"
+    "dev": "pnpm -C packages/core dev",
+    "dev:server": "PORT=3000 tsx src/server.ts"
   },
   "packageManager": "pnpm@10.15.1",
   "dependencies": {
