@@ -18,12 +18,12 @@ export class SqliteAdapter implements Adapter {
     this.insertEvent = this.db.prepare(
       `INSERT INTO events (seq, ts, type, id, value_json, value_blob, value_ct, trace_id, version)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(seq) DO NOTHING`,
+       ON CONFLICT DO NOTHING`,
     );
     this.insertSnapshot = this.db.prepare(
       `INSERT INTO events (seq, ts, type, id, value_json, value_blob, value_ct, trace_id, version)
        VALUES (?, ?, 'Snapshot', NULL, NULL, NULL, NULL, ?, ?)
-       ON CONFLICT(seq) DO NOTHING`,
+       ON CONFLICT DO NOTHING`,
     );
     this.upsertState = this.db.prepare(
       `INSERT INTO state(id, value_json, value_blob, value_ct) VALUES(?, ?, ?, ?)
@@ -68,10 +68,7 @@ export class SqliteAdapter implements Adapter {
       ev.version,
     );
     const inserted = !!(res && typeof res.changes === "number" ? res.changes > 0 : true);
-    if (!inserted && ev.traceId) {
-      // duplicate by traceId or seq; skip state mutation
-      return;
-    }
+    if (!inserted) return; // duplicate by seq or traceId/id
     switch (ev.type) {
       case "Create":
       case "Update":
