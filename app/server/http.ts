@@ -15,6 +15,9 @@ export function startServer(port = 8080, opts: BootstrapOptions = {}) {
       if (req.method === "GET" && req.url === "/stream") {
         return sse.handler(req, res);
       }
+      if (req.method === "GET" && req.url === "/logs") {
+        return await logsPage(res);
+      }
       if (req.method === "GET" && req.url === "/health") {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
@@ -176,5 +179,87 @@ async function statusPage(ctx: { host: ReturnType<typeof bootstrap>["host"]; sse
   </body>
 </html>`;
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+}
+
+async function logsPage(res: http.ServerResponse) {
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realtime Logs</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 20px; color:#111827; }
+    header { display:flex; align-items:center; gap:12px; }
+    #controls { display:flex; gap:8px; margin: 12px 0; }
+    button, input { padding:6px 10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
+    #log { height: 60vh; overflow: auto; background:#0b1021; color:#e5e7eb; padding:12px; border-radius:8px; }
+    .line { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; }
+    .ts { color:#93c5fd; }
+    .seq { color:#bbf7d0; }
+    .type { color:#facc15; }
+    .id { color:#fda4af; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Realtime Logs</h1>
+    <a href="/" style="margin-left:auto;color:#2563eb;text-decoration:none">status</a>
+  </header>
+  <div id="controls">
+    <button id="pause">Pause</button>
+    <label><input type="checkbox" id="autoscroll" checked /> Autoscroll</label>
+    <input id="filter" placeholder="filter type/id (regex)" />
+    <button id="clear">Clear</button>
+  </div>
+  <div id="log"></div>
+  <script>
+    const logEl = document.getElementById('log');
+    const pauseBtn = document.getElementById('pause');
+    const clearBtn = document.getElementById('clear');
+    const filterInput = document.getElementById('filter');
+    const autoscroll = document.getElementById('autoscroll');
+    let paused = false;
+    pauseBtn.onclick = () => { paused = !paused; pauseBtn.textContent = paused ? 'Resume' : 'Pause'; };
+    clearBtn.onclick = () => { logEl.innerHTML = ''; };
+    const es = new EventSource('/stream');
+    es.onmessage = (ev) => {
+      if (paused) return;
+      try {
+        const n = JSON.parse(ev.data);
+        const f = filterInput.value.trim();
+        if (f) {
+          const re = new RegExp(f);
+          const fid = n.id ?? '';
+          const ftype = n.type ?? '';
+          if (!re.test(String(fid)) && !re.test(String(ftype))) return;
+        }
+        const p = document.createElement('div');
+        p.className = 'line';
+        const seq = n.seq != null ? String(n.seq) : '-';
+        const ts = n.ts || new Date().toISOString();
+        const id = n.id != null ? String(n.id) : '-';
+        const body = n.value != null ? JSON.stringify(n.value) : '';
+        p.innerHTML = 
+          '<span class="ts">' + ts + '</span> ' +
+          '<span class="seq">#' + seq + '</span> ' +
+          '<span class="type">' + n.type + '</span>' +
+          (id !== '-' ? ' <span class="id">' + id + '</span>' : '') +
+          (body ? ' ' + body : '');
+        logEl.appendChild(p);
+        if (autoscroll.checked) logEl.scrollTop = logEl.scrollHeight;
+      } catch {}
+    };
+    es.onerror = () => {
+      const p = document.createElement('div');
+      p.className = 'line';
+      p.textContent = '[stream error]';
+      logEl.appendChild(p);
+    };
+  </script>
+</body>
+</html>`;
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
   res.end(html);
 }

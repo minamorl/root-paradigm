@@ -4,6 +4,8 @@ import { join } from 'path';
 export default defineConfig({
   test: {
     environment: 'node',
+    pool: 'threads',
+    include: ['**/*.test.ts', '**/*.spec.ts', '../host/__tests__/**/*.spec.ts'],
   },
   resolve: {
     alias: {

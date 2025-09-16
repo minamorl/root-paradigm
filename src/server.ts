@@ -6,4 +6,8 @@ startServer(port, {
   sqlite: "todos.db", // SQLite ファイルに保存
   journalDir: "journal",
 }); // ポートで起動
-console.log(`[server] Listening on http://localhost:${port}  — open / for status`);
+console.log(`[server] Listening on http://localhost:${port}`);
+console.log(`  • Status:   http://localhost:${port}/`);
+console.log(`  • JSON:     http://localhost:${port}/status.json`);
+console.log(`  • Logs:     http://localhost:${port}/logs`);
+console.log(`  • Stream:   http://localhost:${port}/stream`);
